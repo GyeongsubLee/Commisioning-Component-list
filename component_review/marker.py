@@ -17,7 +17,7 @@ def save_marked(src, dst, selections: dict, rgb, cfg: Config):
             shape = page.new_shape()
             for a, b in sel.strokes:
                 shape.draw_line(pymupdf.Point(a), pymupdf.Point(b))
-            shape.finish(color=color, width=cfg.mark_width, stroke_opacity=cfg.mark_opacity,
+            shape.finish(color=color, width=max(cfg.mark_width, 3.0 * getattr(sel, "pipe_width", 0.0)), stroke_opacity=cfg.mark_opacity,
                          lineCap=1, lineJoin=1, closePath=False)
             shape.commit(overlay=True)
         for t in sel.in_tags:

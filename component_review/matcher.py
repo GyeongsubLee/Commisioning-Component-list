@@ -17,6 +17,7 @@ class Selection:
     strokes: list = field(default_factory=list)   # 색칠할 선분 [((x,y),(x,y))]
     in_tags: list = field(default_factory=list)   # IsoTag
     out_tags: list = field(default_factory=list)
+    pipe_width: float = 0.0
 
 
 def _split(pipes, anchors, r):
@@ -93,6 +94,7 @@ def _all(page: IsoPage, cfg: Config):
 
 def select(page: IsoPage, pid_tags, line_key, pid_lines, cfg: Config) -> Selection:
     sel = Selection()
+    sel.pipe_width = page.pipe_width
     sel.in_tags = [t for t in page.tags if t.tag in pid_tags]
     sel.out_tags = [t for t in page.tags if t.tag not in pid_tags]
     line_marked = line_key in pid_lines

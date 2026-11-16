@@ -132,10 +132,31 @@ def test_heavy_drawings():
     assert time.time() - t0 < 20
     assert not page.pipes and sel.status == "수동 검토" and sel.in_tags and not sel.strokes
     # Tag가 없고 배관도 못 찾으면 "색칠되지 않음"으로 표시되어야 한다
+    tags = page.tags
     page.tags = []
     sel = select(page, {}, "305-HI-0007", {"305-HI-0007": "x"}, Config())
     assert sel.status == "수동 검토" and "색칠되지 않음" in sel.reason, sel.reason
     assert "PCV" in cfg.excluded_prefixes
+
+    # 실제 도면 형태: 선 굵기는 모두 같고 배관은 채워진 사각형으로 그려짐
+    doc = pymupdf.open(work / "flat.pdf")
+    pg = doc[0]
+    for (x0, y0), (x1, y1) in (((100, 300), (392, 300)), ((408, 300), (700, 300)), ((500, 300), (600, 200))):
+        ux, uy = x1 - x0, y1 - y0
+        L = (ux * ux + uy * uy) ** 0.5
+        nx, ny = -uy / L * 1.2, ux / L * 1.2
+        pg.draw_quad(pymupdf.Quad((x0 + nx, y0 + ny), (x1 + nx, y1 + ny), (x0 - nx, y0 - ny), (x1 - nx, y1 - ny)),
+                     color=None, fill=(0, 0, 0))
+    pg.draw_polyline([(300, 500), (306, 497), (306, 503), (300, 500)], color=None, fill=(0, 0, 0))  # 화살촉
+    doc.save(work / "quads.pdf")
+    page = read_iso(work / "quads.pdf", cfg)[0]
+    assert page.method == "채워진 도형" and len(page.pipes) == 3, (page.method, len(page.pipes))
+    sel = select(page, {"343-GV-0091": ""}, "305-HI-0007", {}, cfg)
+    assert sel.status == "OK" and len(sel.strokes) >= 4
+    assert abs(page.tags[0].anchor[1] - 300) < 1.5 and 390 < page.tags[0].anchor[0] < 410
+    from component_review.marker import save_marked
+    save_marked(work / "quads.pdf", work / "quads_markedup.pdf", {0: sel}, (0x5C, 0x8A, 0xB8), cfg)
+    assert blue_at(work / "quads_markedup.pdf", 250, 303) and blue_at(work / "quads_markedup.pdf", 550, 253)
     return took
 
 

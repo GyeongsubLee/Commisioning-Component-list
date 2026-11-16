@@ -23,6 +23,7 @@ class IsoPage:
     pipes: list = field(default_factory=list)   # [((x1,y1),(x2,y2))]
     tags: list = field(default_factory=list)
     pipe_width: float = 0.0
+    method: str = "선 굵기"
     line: str = ""             # Title block의 Line number (예: 305-HI-0007)
     note: str = ""
 
@@ -101,7 +102,7 @@ def drawing_area(page):
         for hit in page.search_for(key):
             if hit.x0 > r.width * 0.4:
                 x1 = min(x1, hit.x0 - 4)
-    for key in ("LEGEND", "PIPELINE DATA"):
+    for key in ("LEGEND", "PIPELINE DATA", "SHOP WELD", "FIELD WELD", "Line number", "P&ID Ref"):
         for hit in page.search_for(key):
             if hit.y0 > r.height * 0.5:
                 y1 = min(y1, hit.y0 - 4)
@@ -136,6 +137,67 @@ def read_segments(page, area):
                 continue
             segs.append((a, b, w))
     return segs
+
+
+def quad_centerline(pts):
+    """사각형(꼭짓점 4개, 둘레 순서) -> (중심선 시작, 끝, 폭)."""
+    s = [dist(pts[i], pts[(i + 1) % 4]) for i in range(4)]
+    mid = lambda p, q: ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
+    if s[0] + s[2] <= s[1] + s[3]:
+        return mid(pts[0], pts[1]), mid(pts[2], pts[3]), (s[0] + s[2]) / 2
+    return mid(pts[1], pts[2]), mid(pts[3], pts[0]), (s[1] + s[3]) / 2
+
+
+def filled_quads(page, area):
+    """채워진 사각형 도형들의 [(중심선 시작, 끝, 폭)]. CAD가 굵은 선을 채워진 면으로 출력한 경우."""
+    out = []
+    for d in page.get_cdrawings():
+        if "f" not in d.get("type", "") or d.get("fill") is None:
+            continue
+        rings, chain = [], []
+        for it in d["items"]:
+            if it[0] == "qu":
+                q = [(float(p[0]), float(p[1])) for p in it[1]]
+                rings.append([q[0], q[1], q[3], q[2]])
+            elif it[0] == "re":
+                x0, y0, x1, y1 = (float(v) for v in it[1][:4])
+                rings.append([(x0, y0), (x1, y0), (x1, y1), (x0, y1)])
+            elif it[0] == "l":
+                a, b = (float(it[1][0]), float(it[1][1])), (float(it[2][0]), float(it[2][1]))
+                if not chain or dist(chain[-1], a) > 0.05:
+                    if len(chain) >= 4:
+                        rings.append(chain)
+                    chain = [a]
+                chain.append(b)
+            else:
+                chain = []
+        if len(chain) >= 4:
+            rings.append(chain)
+        for ring in rings:
+            if len(ring) >= 4 and dist(ring[0], ring[-1]) <= 0.05:
+                ring = ring[:-1]
+            if len(ring) != 4:
+                continue
+            a, b, w = quad_centerline(ring)
+            if _inside(a, area) and _inside(b, area):
+                out.append((a, b, w))
+    return out
+
+
+def fill_pipes(quads, cfg: Config):
+    """채워진 사각형 중 배관(가늘고 긴 것, 대표 폭과 비슷한 것)만 고른다. -> (선분 목록, 대표 폭)"""
+    slim = [(a, b, w) for a, b, w in quads if 0.2 <= w <= cfg.fill_pipe_max_width and dist(a, b) >= max(w, 2.0)]
+    if not slim:
+        return [], 0.0
+    by_w = {}
+    for a, b, w in slim:
+        k = round(w * 2) / 2
+        by_w[k] = by_w.get(k, 0.0) + dist(a, b)
+    main = max(by_w, key=by_w.get) or 0.5
+    picked = [(a, b) for a, b, w in slim if 0.5 * main <= w <= 1.6 * main + 0.5]
+    if sum(dist(a, b) for a, b in picked) < 40:
+        return [], 0.0
+    return picked, main
 
 
 def pipe_threshold(segs, cfg: Config):
@@ -216,7 +278,11 @@ def read_iso(path, cfg: Config):
         segs = read_segments(page, area)
         thr = pipe_threshold(segs, cfg)
         ip = IsoPage(index=page.number, area=area)
-        if thr is None:
+        fpipes, fwidth = fill_pipes(filled_quads(page, area), cfg)
+        if fpipes:   # 굵은 선이 채워진 면으로 그려진 도면
+            ip.pipes, ip.pipe_width, ip.method = fpipes, fwidth, "채워진 도형"
+            thin = [(a, b) for a, b, w in segs]
+        elif thr is None:
             ip.note = "배관선 굵기를 구분하지 못함"
             thin = [(a, b) for a, b, w in segs]
         else:

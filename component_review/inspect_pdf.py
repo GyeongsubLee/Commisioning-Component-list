@@ -7,7 +7,7 @@ from collections import Counter, defaultdict
 import pymupdf
 
 from .config import Config, float_to_rgb, hex_to_rgb, color_dist
-from .iso_reader import drawing_area, read_segments, pipe_threshold
+from .iso_reader import drawing_area, read_segments, pipe_threshold, filled_quads, fill_pipes, dist
 from .pid_reader import text_lines
 
 
@@ -104,6 +104,12 @@ def inspect_page(page, cfg, target):
     ocgs = page.parent.get_ocgs() if hasattr(page.parent, "get_ocgs") else {}
     if ocgs:
         print("  PDF 레이어 목록: " + ", ".join(v.get("name", "?") for v in ocgs.values()))
+    quads = filled_quads(page, area)
+    wq = Counter(round(w * 2) / 2 for _, _, w in quads)
+    picked, main = fill_pipes(quads, cfg)
+    print(f"[채워진 사각형] {len(quads)}개, 폭(pt)별 개수: {_top(wq, 10)}")
+    print("  긴 것 (길이x폭): " + ", ".join(f"{dist(a, b):.0f}x{w:.1f}" for a, b, w in sorted(quads, key=lambda q: -dist(q[0], q[1]))[:10]))
+    print(f"  → 배관으로 판단: {len(picked)}개, 대표 폭 {main}, 총 길이 {sum(dist(a, b) for a, b in picked):.0f}pt")
     segs = read_segments(page, area)
     thr = pipe_threshold(segs, cfg)
     n_pipe = sum(1 for _, _, w in segs if thr is not None and w >= thr)

@@ -32,6 +32,7 @@ class Config:
     # --- ISO 배관선 ---
     pipe_min_width: float = 0.0  # 0이면 자동 (가장 굵은 선 군집). inspect_pdf 결과로 지정 가능
     pipe_width_ratio: float = 0.6  # 자동일 때: 최대 굵기의 이 비율 이상을 배관으로 봄
+    fill_pipe_max_width: float = 8.0  # 채워진 도형으로 그려진 배관의 최대 폭(pt)
     gap_tol: float = 20.0        # 밸브 심볼 등으로 끊긴 배관을 이어주는 최대 간격(pt)
     anchor_radius: float = 26.0  # Tag 위치와 배관 끊김 지점을 같은 곳으로 보는 반경(pt)
     leader_touch: float = 6.0    # Tag 글자와 지시선 시작점 사이 허용 거리(pt)
