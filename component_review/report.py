@@ -10,8 +10,9 @@ FILLS = {"MATCH": "C6EFCE", "LIST ONLY": "FFC7CE", "ISO ONLY": "FFEB9C", "OTHER 
 CMP_COLS = ["Subsystem Number", "Tag Number", "Component Type", "결과", "설명",
             "기존 List", "ISO 추출", "PID 색칠", "LINE NO", "ISO", "Reference Document"]
 ISO_COLS = ["Subsystem Number", "LINE NO", "ISO", "파일", "Page", "상태", "사유",
-            "추출 Tag (영역 안)", "제외 Tag (영역 밖)", "저장 파일"]
-LINE_COLS = ["Subsystem Number", "Line Number", "결과", "기존 List", "PID 색칠"]
+            "추출 Tag (영역 안)", "제외 Tag (영역 밖)", "저장 파일", "도면 Line No."]
+LINE_COLS = ["Subsystem Number", "Line Number", "결과", "기존 List", "PID 색칠",
+             "PID No. (판독된 PID)", "Reference Document (기존 List)", "비고"]
 PID_COLS = ["Subsystem Number", "Color Code", "PID 파일", "판독 방식", "새로 읽은 Tag 수", "새로 읽은 Line 수", "비고"]
 
 
@@ -60,12 +61,27 @@ def compare_tags(subsystems, complist, extracted, iso_rows, pid_tags_by_sub):
 
 def compare_lines(sub, complist, pid):
     lst = complist[(complist["subsystem"] == sub) & (complist["ctype"].str.lower() == "line number")]
+    refs = {}
+    for _, r in lst.iterrows():
+        if r["ref"] and r["ref"] not in refs.setdefault(r["tag"], []):
+            refs[r["tag"]].append(r["ref"])
     listed = set(lst["tag"])
-    marked = set(pid.lines.values())
+    marked = set(pid.line_files)
+    stem = lambda s: s[:-4] if s.lower().endswith(".pdf") else s
     rows = []
     for ln in sorted(listed | marked):
         res = "MATCH" if ln in listed and ln in marked else ("LIST ONLY" if ln in listed else "PID ONLY")
-        rows.append([sub, ln, res, "Y" if ln in listed else "N", "Y" if ln in marked else "N"])
+        found, ref = pid.line_files.get(ln, []), refs.get(ln, [])
+        note = ""
+        if found and ref:
+            miss = [x for x in ref if stem(x) not in {stem(f) for f in found}]
+            extra = [f for f in found if stem(f) not in {stem(x) for x in ref}]
+            if miss:
+                note = "List의 Reference Document에서는 색칠된 Line을 읽지 못함: " + ", ".join(miss)
+            elif extra:
+                note = "List에 없는 PID에도 색칠되어 있음: " + ", ".join(extra)
+        rows.append([sub, ln, res, "Y" if ln in listed else "N", "Y" if ln in marked else "N",
+                     ", ".join(found), ", ".join(ref), note])
     return rows
 
 

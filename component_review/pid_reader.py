@@ -14,6 +14,7 @@ BARE_NUM_RE = re.compile(r"^\d{4}[A-Z]?$")
 class PidResult:
     tags: dict = field(default_factory=dict)    # tag -> PID 파일명
     lines: dict = field(default_factory=dict)   # '305-HI-0007' -> 전체 Line No.
+    line_files: dict = field(default_factory=dict)  # 전체 Line No. -> [PID 파일명]
     files: list = field(default_factory=list)
     mode: str = ""                              # 'text-color' / 'near-colored-line' / 'none'
     notes: list = field(default_factory=list)
@@ -107,6 +108,9 @@ def read_pid_folder(folder, rgb, cfg: Config, log=None) -> PidResult:
                     for m in cfg.line_re.finditer(text):
                         if is_marked(rect, marks, m.start()):
                             res.lines.setdefault(m.group(1), m.group(0))
+                            lf = res.line_files.setdefault(m.group(0), [])
+                            if pdf.name not in lf:
+                                lf.append(pdf.name)
                             found = True
                     for m in cfg.pid_tag_re.finditer(text):
                         u, pre, num = m.groups()

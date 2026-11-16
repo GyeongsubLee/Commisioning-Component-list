@@ -1,5 +1,6 @@
 """ISO PDF에서 도면 영역, 배관선, Tag와 그 위치를 읽는다."""
 import math
+import re
 from dataclasses import dataclass, field
 import pymupdf
 
@@ -22,6 +23,7 @@ class IsoPage:
     pipes: list = field(default_factory=list)   # [((x1,y1),(x2,y2))]
     tags: list = field(default_factory=list)
     pipe_width: float = 0.0
+    line: str = ""             # Title block의 Line number (예: 305-HI-0007)
     note: str = ""
 
 
@@ -188,6 +190,22 @@ def _trace_leader(rect, thin: SegmentGrid, pipes: SegmentGrid, cfg: Config):
     return best[1] if best else None
 
 
+LINE_KEY_RE = re.compile(r"(?<![\w/\-])(\d{3}-[A-Z]{1,4}\d{0,2}-\d{4})(?![\w])")
+
+
+def title_line(page, lines):
+    """Title block의 'Line number' 또는 'Isometric drawing' 옆에 적힌 Line No."""
+    for key in ("Line number", "Isometric drawing"):
+        for hit in page.search_for(key):
+            for text, rect, _ in lines:
+                if rect.y1 < hit.y0 - 3 or rect.y0 > hit.y1 + 3 or rect.x1 < hit.x0:
+                    continue
+                m = LINE_KEY_RE.search(text)
+                if m:
+                    return m.group(1)
+    return ""
+
+
 def read_iso(path, cfg: Config):
     """ISO PDF 한 개 -> [IsoPage]."""
     pages = []
@@ -213,7 +231,9 @@ def read_iso(path, cfg: Config):
         thin_grid = SegmentGrid(thin, cfg.grid_cell)
         pipe_grid = SegmentGrid(ip.pipes, cfg.grid_cell)
         seen = set()
-        for text, rect, _ in text_lines(page):
+        tlines = text_lines(page)
+        ip.line = title_line(page, tlines)
+        for text, rect, _ in tlines:
             c = ((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2)
             if not _inside(c, area):
                 continue

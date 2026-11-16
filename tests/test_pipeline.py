@@ -70,6 +70,12 @@ def test_pipeline():
     assert blue_at(full, 480, 300) and blue_at(full, 375, 305)
     assert len(list(pymupdf.open(full)[0].annots())) == 3
 
+    reason = {r[2]: r[6] for r in res["iso"]}
+    assert "305-HI-0010" in reason[ISO % 500] and "다름" in reason[ISO % 500]
+    assert {r[2]: r[10] for r in res["iso"]}[ISO % 416] == "305-HI-0007"
+    lrow = {r[1]: r for r in res["lines"]}
+    assert "PID-30504" in lrow["305-HI-0008-100-ACB2B05SN53-NN"][5]
+    assert "PID-34301" in lrow["305-HI-0007-100-ACB2B05SN53-NN"][5] and "List에 없는 PID" in lrow["305-HI-0007-100-ACB2B05SN53-NN"][7]
     lines = {r[1]: r[2] for r in res["lines"]}
     assert lines["305-HI-0007-100-ACB2B05SN53-NN"] == "MATCH"
     assert (work / "pid" / "component_review_report.xlsx").exists()
@@ -125,6 +131,11 @@ def test_heavy_drawings():
     sel = select(page, {"343-GV-0091": ""}, "305-HI-0007", {}, cfg)
     assert time.time() - t0 < 20
     assert not page.pipes and sel.status == "수동 검토" and sel.in_tags and not sel.strokes
+    # Tag가 없고 배관도 못 찾으면 "색칠되지 않음"으로 표시되어야 한다
+    page.tags = []
+    sel = select(page, {}, "305-HI-0007", {"305-HI-0007": "x"}, Config())
+    assert sel.status == "수동 검토" and "색칠되지 않음" in sel.reason, sel.reason
+    assert "PCV" in cfg.excluded_prefixes
     return took
 
 

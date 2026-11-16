@@ -18,6 +18,7 @@ class Config:
         "TG", "TI", "TE", "TT", "TW", "TIC", "FT", "FI", "FE", "FIC", "FQ", "FO",
         "FV", "PV", "LV", "TV", "HV", "XV", "XZV", "UV", "MOV", "SDV", "BDV",
         "LT", "LG", "LIC", "LS", "AT", "AE", "AI", "HS", "ZS", "ZT", "XA", "SP",
+        "PCV", "TCV", "FCV", "LCV", "PDCV", "HCV", "PSE", "ESDV", "XCV", "FF", "FY",
     })
     # Special item으로 분류할 접두어. 그 외는 Valve.
     special_prefixes: set = field(default_factory=lambda: {

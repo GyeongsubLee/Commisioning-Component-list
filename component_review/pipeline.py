@@ -114,7 +114,7 @@ def run(iso_dir, pid_root, system_list, component_list, subsystems=None, report_
             done.add((iso_no, line_key))
             files = find_iso_files(iso_index, iso_no)
             if not files:
-                iso_rows.append([sub, line_key, iso_no, "", "", REVIEW, "ISO PDF 파일을 찾지 못함", "", "", ""])
+                iso_rows.append([sub, line_key, iso_no, "", "", REVIEW, "ISO PDF 파일을 찾지 못함", "", "", "", ""])
                 log(f"  ISO 파일 없음: {iso_no}")
             tasks.extend((iso_no, line_key, f) for f in files)
 
@@ -129,7 +129,7 @@ def run(iso_dir, pid_root, system_list, component_list, subsystems=None, report_
                 except Exception as e:  # 손상된 PDF 등
                     cache[f] = e
             if isinstance(cache[f], Exception):
-                iso_rows.append([sub, line_key, iso_no, f.name, "", REVIEW, f"PDF 읽기 실패: {cache[f]}", "", "", ""])
+                iso_rows.append([sub, line_key, iso_no, f.name, "", REVIEW, f"PDF 읽기 실패: {cache[f]}", "", "", "", ""])
                 log(f"{head} … 읽기 실패: {cache[f]}")
                 n_review += 1
                 continue
@@ -139,6 +139,10 @@ def run(iso_dir, pid_root, system_list, component_list, subsystems=None, report_
                 if iso_owner.get(iso_no, 1) > 1 and sel.status != NA:
                     sel.status = REVIEW
                     sel.reason = (sel.reason + " / " if sel.reason else "") + "이 ISO는 여러 Subsystem의 List에 있음"
+                if page.line and page.line != line_key and sel.status != NA:
+                    sel.status = REVIEW
+                    sel.reason = (sel.reason + " / " if sel.reason else "") + \
+                        f"도면의 Line No.({page.line})가 List({line_key})와 다름"
                 saved = ""
                 if sel.status != NA and (sel.strokes or sel.in_tags):
                     sels[page.index] = sel
@@ -148,7 +152,7 @@ def run(iso_dir, pid_root, system_list, component_list, subsystems=None, report_
                 n_review += sel.status == REVIEW
                 iso_rows.append([sub, line_key, iso_no, f.name, page.index + 1, sel.status, sel.reason,
                                  ", ".join(sorted({t.tag for t in sel.in_tags})),
-                                 ", ".join(sorted({t.tag for t in sel.out_tags})), saved])
+                                 ", ".join(sorted({t.tag for t in sel.out_tags})), saved, page.line])
                 for t in sel.in_tags:
                     if t.tag in seen_tags:
                         continue
@@ -160,7 +164,7 @@ def run(iso_dir, pid_root, system_list, component_list, subsystems=None, report_
                 try:
                     save_marked(f, folder / (f.stem + "_markedup.pdf"), sels, rgb, cfg)
                 except Exception as e:
-                    iso_rows.append([sub, line_key, iso_no, f.name, "", REVIEW, f"저장 실패: {e}", "", "", ""])
+                    iso_rows.append([sub, line_key, iso_no, f.name, "", REVIEW, f"저장 실패: {e}", "", "", "", ""])
                     states.append(f"저장 실패({e})")
             log(f"{head} … {'/'.join(dict.fromkeys(states))}, Tag {n_in}개, {time.time() - t0:.1f}초")
 

@@ -44,7 +44,7 @@ Subsystem 하나가 끝날 때마다 리포트를 저장하므로, Ctrl+C로 중
 
 - **요약** — Subsystem별 건수
 - **비교 결과** — Tag별 `MATCH` / `LIST ONLY`(기존 List에만 있음) / `ISO ONLY`(ISO에만 있음, 추가 검토) / `OTHER SUBSYSTEM`(다른 Subsystem으로 등록됨)와 그 이유
-- **Line 비교** — 기존 List의 Line Number와 PID에 색칠된 Line No. 대조
+- **Line 비교** — 기존 List의 Line Number와 PID에 색칠된 Line No. 대조, 그 Line을 읽은 PID No.
 - **ISO 처리 현황** — ISO 한 장마다 `OK` / `확인 권장` / `수동 검토` / `무관`
 - **수동 검토** — 사람이 꼭 봐야 하는 ISO만 모음
 - **PID 판독** — PID에서 읽은 Tag / Line 수
@@ -63,10 +63,10 @@ Subsystem 하나가 끝날 때마다 리포트를 저장하므로, Ctrl+C로 중
 이 프로그램은 실제 도면 없이 가짜 도면으로만 검증했습니다. 실제 PDF에서 색칠이나 추출이 맞지 않으면 진단을 돌려 보세요.
 
 ```bash
-python -m component_review.inspect_pdf "ISO 또는 PID.pdf" "#5C8AB8"
+python -m component_review.inspect_pdf "ISO 또는 PID.pdf" --page 1
 ```
 
-글자 색, 선 굵기별 길이, 주석 종류가 나옵니다. 이 결과에 맞춰 `config.py`의 값을 조정합니다.
+선 굵기별 개수·길이, 레이어, 채워진 도형, 색 등 숫자 요약이 나옵니다 (도면의 글자 내용은 출력하지 않음). 이 결과에 맞춰 `config.py`의 값을 조정합니다.
 
 | 증상 | 조정할 값 |
 |---|---|

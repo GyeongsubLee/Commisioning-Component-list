@@ -112,15 +112,17 @@ def select(page: IsoPage, pid_tags, line_key, pid_lines, cfg: Config) -> Selecti
             sel.status, sel.reason = NA, "ISO의 Tag가 모두 PID 색칠 범위 밖"
     else:
         if not pid_lines:
-            sel.status, sel.reason = REVIEW, "Tag 없음, PID에서 Line No.도 읽지 못함 (전체 색칠)"
+            sel.status, sel.reason = REVIEW, "Tag 없음, PID에서 Line No.도 읽지 못함 → 전체 색칠 대상으로 처리"
             sel.strokes = _all(page, cfg)
         elif line_marked:
-            sel.status, sel.reason = CHECK, "Tag 없음 → Line No. 기준으로 전체 색칠"
+            sel.status, sel.reason = CHECK, "Tag 없음 → Line No. 기준 전체 색칠 대상"
             sel.strokes = _all(page, cfg)
         else:
             sel.status, sel.reason = NA, "Tag 없음, Line No.가 PID에 색칠되어 있지 않음"
 
-    if sel.status != NA and (sel.in_tags or sel.strokes) and not page.pipes:
+    wants_color = sel.status in (OK, CHECK) or bool(sel.in_tags) or "전체 색칠 대상" in sel.reason
+    if wants_color and not sel.strokes:
         sel.status = REVIEW
-        sel.reason = (sel.reason + " / " if sel.reason else "") + f"{page.note or '배관선 인식 실패'} → Tag만 형광펜 표시"
+        tail = "색칠되지 않음, Tag만 형광펜 표시" if sel.in_tags else "색칠되지 않음"
+        sel.reason = (sel.reason + " / " if sel.reason else "") + f"{page.note or '배관선 인식 실패'} → {tail}"
     return sel
