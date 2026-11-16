@@ -50,6 +50,47 @@ def seg_gap(s, t):
     return best
 
 
+class SegmentGrid:
+    """선분을 격자 칸에 등록해 두고, 어떤 범위 근처의 선분만 빠르게 찾는다."""
+
+    def __init__(self, segs, cell=40.0):
+        self.segs, self.cell, self.cells = segs, cell, {}
+        for i, (a, b) in enumerate(segs):
+            n = max(1, int(dist(a, b) / (cell / 2)) + 1)
+            keys = {(int((a[0] + (b[0] - a[0]) * k / n) // cell), int((a[1] + (b[1] - a[1]) * k / n) // cell))
+                    for k in range(n + 1)}
+            for key in keys:
+                self.cells.setdefault(key, []).append(i)
+
+    def query(self, x0, y0, x1, y1):
+        """범위에 걸친 칸(양옆 한 칸 여유)에 있는 선분 번호."""
+        c, out = self.cell, set()
+        for gx in range(int(x0 // c) - 1, int(x1 // c) + 2):
+            for gy in range(int(y0 // c) - 1, int(y1 // c) + 2):
+                out.update(self.cells.get((gx, gy), ()))
+        return out
+
+    def near(self, p, r):
+        return self.query(p[0] - r, p[1] - r, p[0] + r, p[1] + r)
+
+    def nearest(self, p):
+        """(거리, 선분 위의 점, 선분 번호). 가까운 칸부터 넓혀 가며 찾는다."""
+        if not self.segs:
+            return None
+        r = self.cell
+        while True:
+            best = None
+            cand = self.near(p, r) if r < 1e5 else range(len(self.segs))
+            for i in cand:
+                q = project(p, *self.segs[i])
+                d = dist(p, q)
+                if best is None or d < best[0]:
+                    best = (d, q, i)
+            if best and (best[0] <= r or r >= 1e5):
+                return best
+            r = r * 4 if r < 5000 else 1e5
+
+
 def drawing_area(page):
     """오른쪽 BOM 표와 아래 Legend/Title block을 뺀 도면 영역."""
     r = pymupdf.Rect(page.rect)
@@ -73,7 +114,7 @@ def read_segments(page, area):
     """[(p1, p2, width)] - 도면 영역 안의 선 (곡선은 양 끝점을 잇는 선으로 근사)."""
     segs = []
     aw, ah = area[2] - area[0], area[3] - area[1]
-    for d in page.get_drawings():
+    for d in page.get_cdrawings():
         if d.get("color") is None or "s" not in d.get("type", ""):
             continue
         w = round(float(d.get("width") or 0.0), 2)
@@ -84,7 +125,7 @@ def read_segments(page, area):
                 a, b = it[1], it[4]
             else:
                 continue
-            a, b = (a.x, a.y), (b.x, b.y)
+            a, b = (float(a[0]), float(a[1])), (float(b[0]), float(b[1]))
             L = dist(a, b)
             if L < 0.5 or not (_inside(a, area) and _inside(b, area)):
                 continue
@@ -110,7 +151,7 @@ def pipe_threshold(segs, cfg: Config):
     return wmax * cfg.pipe_width_ratio
 
 
-def _trace_leader(rect, thin, pipes, cfg: Config):
+def _trace_leader(rect, thin: SegmentGrid, pipes: SegmentGrid, cfg: Config):
     """Tag 글자에서 지시선을 따라가 배관 위의 위치를 찾는다."""
     t = cfg.leader_touch
     box = (rect[0] - t, rect[1] - t, rect[2] + t, rect[3] + t)
@@ -118,7 +159,8 @@ def _trace_leader(rect, thin, pipes, cfg: Config):
     points = [center]
     frontier = []
     used = set()
-    for i, (a, b) in enumerate(thin):
+    for i in thin.query(*box):
+        a, b = thin.segs[i]
         if _inside(a, box) or _inside(b, box):
             used.add(i)
             for p in (a, b):
@@ -127,10 +169,11 @@ def _trace_leader(rect, thin, pipes, cfg: Config):
                     frontier.append(p)
     for _ in range(cfg.leader_depth - 1):
         nxt = []
-        for p in frontier:
-            for i, (a, b) in enumerate(thin):
+        for p in frontier[:50]:
+            for i in thin.near(p, 1.5):
                 if i in used:
                     continue
+                a, b = thin.segs[i]
                 if dist(p, a) <= 1.5 or dist(p, b) <= 1.5:
                     used.add(i)
                     far = b if dist(p, a) <= 1.5 else a
@@ -138,12 +181,10 @@ def _trace_leader(rect, thin, pipes, cfg: Config):
                     nxt.append(far)
         frontier = nxt
     best = None
-    for p in points:
-        for a, b in pipes:
-            q = project(p, a, b)
-            d = dist(p, q)
-            if best is None or d < best[0]:
-                best = (d, q)
+    for p in points[:400]:
+        hit = pipes.nearest(p)
+        if hit and (best is None or hit[0] < best[0]):
+            best = hit
     return best[1] if best else None
 
 
@@ -166,6 +207,11 @@ def read_iso(path, cfg: Config):
             ip.pipe_width = thr
             if not ip.pipes:
                 ip.note = "배관선을 찾지 못함"
+            elif len(ip.pipes) > cfg.max_pipe_segments:
+                ip.note = f"배관선으로 잡힌 선이 너무 많음({len(ip.pipes)}개) - 굵기 기준(pipe_min_width) 조정 필요"
+                thin, ip.pipes = [(a, b) for a, b, w in segs], []
+        thin_grid = SegmentGrid(thin, cfg.grid_cell)
+        pipe_grid = SegmentGrid(ip.pipes, cfg.grid_cell)
         seen = set()
         for text, rect, _ in text_lines(page):
             c = ((rect.x0 + rect.x1) / 2, (rect.y0 + rect.y1) / 2)
@@ -183,7 +229,7 @@ def read_iso(path, cfg: Config):
                 seen.add((tag, round(r[0]), round(r[1])))
                 it = IsoTag(tag=tag, prefix=pre, rect=r)
                 if ip.pipes:
-                    it.anchor = _trace_leader(r, thin, ip.pipes, cfg)
+                    it.anchor = _trace_leader(r, thin_grid, pipe_grid, cfg)
                 ip.tags.append(it)
         pages.append(ip)
     doc.close()

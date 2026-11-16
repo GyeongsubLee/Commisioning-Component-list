@@ -2,7 +2,7 @@
 from dataclasses import dataclass, field
 
 from .config import Config
-from .iso_reader import IsoPage, dist, project, seg_gap
+from .iso_reader import IsoPage, SegmentGrid, dist, project, seg_gap
 
 OK = "OK"
 REVIEW = "수동 검토"
@@ -36,6 +36,17 @@ def _split(pipes, anchors, r):
     return out
 
 
+def _pairs(pipes, cfg: Config):
+    """서로 가까이 있을 수 있는 배관선 쌍 (i < j)."""
+    grid = SegmentGrid(pipes, cfg.grid_cell)
+    g = cfg.gap_tol
+    for i, (a, b) in enumerate(pipes):
+        box = (min(a[0], b[0]) - g, min(a[1], b[1]) - g, max(a[0], b[0]) + g, max(a[1], b[1]) + g)
+        for j in sorted(grid.query(*box)):
+            if j > i:
+                yield i, j
+
+
 def _partial(page: IsoPage, in_tags, out_tags, cfg: Config):
     r = cfg.anchor_radius
     ins = [t.anchor for t in in_tags if t.anchor]
@@ -43,8 +54,8 @@ def _partial(page: IsoPage, in_tags, out_tags, cfg: Config):
     pipes = _split(page.pipes, ins + outs, r)
     n = len(pipes)
     adj = {i: [] for i in range(n)}
-    for i in range(n):
-        for j in range(i + 1, n):
+    for i, j in _pairs(pipes, cfg):
+        if True:
             d, (p, q) = seg_gap(pipes[i], pipes[j])
             if d <= cfg.gap_tol:
                 mid = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2)
@@ -73,12 +84,10 @@ def _partial(page: IsoPage, in_tags, out_tags, cfg: Config):
 
 def _all(page: IsoPage, cfg: Config):
     strokes = list(page.pipes)
-    n = len(page.pipes)
-    for i in range(n):
-        for j in range(i + 1, n):
-            d, (p, q) = seg_gap(page.pipes[i], page.pipes[j])
-            if 0.5 < d <= cfg.gap_tol:
-                strokes.append((p, q))
+    for i, j in _pairs(page.pipes, cfg):
+        d, (p, q) = seg_gap(page.pipes[i], page.pipes[j])
+        if 0.5 < d <= cfg.gap_tol:
+            strokes.append((p, q))
     return strokes
 
 

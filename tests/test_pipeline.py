@@ -78,3 +78,55 @@ def test_pipeline():
 if __name__ == "__main__":
     test_pipeline()
     print("OK")
+
+
+def _heavy_iso(path, n_lines, pipe_width):
+    """선이 아주 많은 ISO (실제 CAD 도면 흉내). pipe_width가 0.35면 굵기로 배관을 구분할 수 없다."""
+    import random
+    rnd = random.Random(1)
+    doc = pymupdf.open()
+    page = doc.new_page(width=1191, height=842)
+    shape = page.new_shape()
+    for _ in range(n_lines):
+        x, y = rnd.uniform(30, 780), rnd.uniform(30, 600)
+        shape.draw_line((x, y), (x + rnd.uniform(-6, 6), y + rnd.uniform(-6, 6)))
+    shape.finish(color=(0, 0, 0), width=0.35)
+    shape.commit()
+    for a, b in (((100, 300), (392, 300)), ((408, 300), (700, 300))):
+        page.draw_line(a, b, color=(0, 0, 0), width=pipe_width)
+    page.insert_text((420, 250), "343-GV-0091", fontsize=7)
+    page.draw_line((400, 300), (420, 252), color=(0, 0, 0), width=0.35)
+    page.insert_text((830, 40), "FABRICATION MATERIALS", fontsize=7)
+    page.insert_text((30, 650), "LEGEND", fontsize=7)
+    doc.save(path)
+
+
+def test_heavy_drawings():
+    import time
+    from component_review.config import Config
+    from component_review.iso_reader import read_iso
+    from component_review.matcher import select
+    work = Path(__file__).parent / "_work"
+    work.mkdir(exist_ok=True)
+    cfg = Config()
+
+    _heavy_iso(work / "heavy.pdf", 30000, 2.0)
+    t0 = time.time()
+    page = read_iso(work / "heavy.pdf", cfg)[0]
+    sel = select(page, {"343-GV-0091": ""}, "305-HI-0007", {}, cfg)
+    took = time.time() - t0
+    assert took < 20, took
+    assert len(page.pipes) == 2 and sel.status == "OK" and len(sel.strokes) == 3
+    assert abs(page.tags[0].anchor[1] - 300) < 1 and 390 < page.tags[0].anchor[0] < 410
+
+    _heavy_iso(work / "flat.pdf", 30000, 0.35)   # 굵기 구분 불가 -> 색칠 없이 수동 검토로 넘어가야 함
+    t0 = time.time()
+    page = read_iso(work / "flat.pdf", cfg)[0]
+    sel = select(page, {"343-GV-0091": ""}, "305-HI-0007", {}, cfg)
+    assert time.time() - t0 < 20
+    assert not page.pipes and sel.status == "수동 검토" and sel.in_tags and not sel.strokes
+    return took
+
+
+if __name__ == "__main__":
+    print("heavy ISO: %.1f초" % test_heavy_drawings())

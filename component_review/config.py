@@ -35,6 +35,8 @@ class Config:
     anchor_radius: float = 26.0  # Tag 위치와 배관 끊김 지점을 같은 곳으로 보는 반경(pt)
     leader_touch: float = 6.0    # Tag 글자와 지시선 시작점 사이 허용 거리(pt)
     leader_depth: int = 4
+    max_pipe_segments: int = 3000  # 배관선이 이보다 많이 잡히면 굵기 판단 실패로 보고 색칠을 건너뜀
+    grid_cell: float = 40.0        # 가까운 선만 비교하기 위한 격자 크기(pt)
 
     # --- 색칠 모양 ---
     mark_width: float = 7.0

@@ -12,7 +12,7 @@ CMP_COLS = ["Subsystem Number", "Tag Number", "Component Type", "결과", "설�
 ISO_COLS = ["Subsystem Number", "LINE NO", "ISO", "파일", "Page", "상태", "사유",
             "추출 Tag (영역 안)", "제외 Tag (영역 밖)", "저장 파일"]
 LINE_COLS = ["Subsystem Number", "Line Number", "결과", "기존 List", "PID 색칠"]
-PID_COLS = ["Subsystem Number", "Color Code", "PID 파일", "PID Tag 수", "PID Line 수", "비고"]
+PID_COLS = ["Subsystem Number", "Color Code", "PID 파일", "판독 방식", "새로 읽은 Tag 수", "새로 읽은 Line 수", "비고"]
 
 
 def compare_tags(subsystems, complist, extracted, iso_rows, pid_tags_by_sub):
@@ -95,6 +95,11 @@ def write(path, cmp_rows, iso_rows, line_rows, pid_rows):
         summary[r[0]][r[3]] += 1
     keys = ["MATCH", "LIST ONLY", "ISO ONLY", "OTHER SUBSYSTEM"]
     sum_rows = [[s] + [v.get(k, 0) for k in keys] for s, v in summary.items()]
+    try:
+        open(path, "ab").close()
+    except PermissionError:   # Excel에서 열려 있는 경우
+        from datetime import datetime
+        path = path.with_name(f"{path.stem}_{datetime.now():%H%M%S}{path.suffix}")
     with pd.ExcelWriter(path, engine="openpyxl") as w:
         _sheet(w, "요약", ["Subsystem Number"] + keys, sum_rows, "Subsystem Number")
         _sheet(w, "비교 결과", CMP_COLS, cmp_rows, "결과")
@@ -102,3 +107,4 @@ def write(path, cmp_rows, iso_rows, line_rows, pid_rows):
         _sheet(w, "ISO 처리 현황", ISO_COLS, iso_rows, "상태")
         _sheet(w, "수동 검토", ISO_COLS, review, "상태")
         _sheet(w, "PID 판독", PID_COLS, pid_rows, "Subsystem Number")
+    return path

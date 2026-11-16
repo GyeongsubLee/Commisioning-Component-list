@@ -29,6 +29,9 @@ python -m component_review
 python -m component_review --iso-dir "D:\ISO" --pid-root "D:\PID" --system-list list.xlsx --component-list comp.xlsx --subsystem 12200-01-02-HI-03
 ```
 
+실행 중에는 PID와 ISO 파일마다 한 줄씩 진행 상황(`ISO [17/120] 파일명 … OK, Tag 3개, 2.1초`)이 표시됩니다.
+Subsystem 하나가 끝날 때마다 리포트를 저장하므로, Ctrl+C로 중단해도 그때까지의 결과가 남습니다.
+
 ## 결과
 
 | 위치 | 파일 | 내용 |
@@ -68,6 +71,7 @@ python -m component_review.inspect_pdf "ISO 또는 PID.pdf" "#5C8AB8"
 | 증상 | 조정할 값 |
 |---|---|
 | 배관이 색칠되지 않음 / 다른 선까지 색칠됨 | `pipe_min_width` (배관선 굵기 기준) |
+| ISO가 `배관선으로 잡힌 선이 너무 많음`으로 수동 검토 처리됨 | `pipe_min_width`를 진단 결과의 배관 굵기로 지정 |
 | 밸브에서 색칠이 끊김 | `gap_tol` 키우기 |
 | PID Tag를 못 읽음 | `color_tol` 키우기 (글자가 검정이면 색칠된 선 근처 Tag를 자동으로 사용) |
 

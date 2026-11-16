@@ -17,6 +17,7 @@ class PidResult:
     files: list = field(default_factory=list)
     mode: str = ""                              # 'text-color' / 'near-colored-line' / 'none'
     notes: list = field(default_factory=list)
+    per_file: list = field(default_factory=list)  # [파일, 방식, Tag 수, Line 수, 비고]
 
 
 def text_lines(page):
@@ -72,13 +73,14 @@ def _unit_of(page_text, filename):
     return max(set(hits), key=hits.count)[:3]
 
 
-def read_pid_folder(folder, rgb, cfg: Config) -> PidResult:
+def read_pid_folder(folder, rgb, cfg: Config, log=None) -> PidResult:
     res = PidResult()
     pdfs = sorted(p for p in Path(folder).glob("*.pdf")
                   if "_markedup" not in p.stem.lower() and "-ISO-" not in p.stem.upper())
     modes = set()
-    for pdf in pdfs:
+    for n_file, pdf in enumerate(pdfs, 1):
         res.files.append(pdf.name)
+        n_tag0, n_line0, fmodes = len(res.tags), len(res.lines), set()
         doc = pymupdf.open(pdf)
         for page in doc:
             page.remove_rotation()
@@ -128,12 +130,23 @@ def read_pid_folder(folder, rgb, cfg: Config) -> PidResult:
 
             by_text = scan(lambda rect, marks, idx: color_dist(_color_at(marks, idx), rgb) <= cfg.color_tol)
             if by_text:
-                modes.add("text-color")
+                fmodes.add("text-color")
             else:
                 geo = _colored_geometry(page, rgb, cfg.color_tol)
                 if geo and scan(lambda rect, marks, idx: _near(rect, geo, cfg.pid_near_dist)):
-                    modes.add("near-colored-line")
+                    fmodes.add("near-colored-line")
         doc.close()
+        modes |= fmodes
+        fmode = "+".join(sorted(fmodes)) or "못 읽음"
+        note = ""
+        if "near-colored-line" in fmodes:
+            note = "글자 색 없음 → 색칠된 선 근처 기준, Tag가 과하게 잡힐 수 있음 (확인 필요)"
+        elif not fmodes:
+            note = "Color Code 색의 글자/선 없음"
+        row = [pdf.name, fmode, len(res.tags) - n_tag0, len(res.lines) - n_line0, note]
+        res.per_file.append(row)
+        if log:
+            log(f"  PID [{n_file}/{len(pdfs)}] {pdf.name} … 새 Tag {row[2]}, 새 Line {row[3]} ({fmode})")
     res.mode = "+".join(sorted(modes)) or "none"
     if not pdfs:
         res.notes.append("Marked up PID PDF가 폴더에 없음")
